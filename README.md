@@ -37,14 +37,23 @@ Varying the following parameters provide different EfficientHRNet models ranging
 More details on scaling can be found in our paper: https://arxiv.org/pdf/2007.08090.pdf
 
 
-## Training and Testing ## 
+## EfficientHRNet Training and Evaluation ## 
 
-Distributed training is supported.
+Distributed training is supported. Config settings can be customized based on user requirements. Training and validation scripts can be found at tools/
+
+### Training on COCO (Nvidia GPUs) ###
+
+(Single GPU training) CUDA_VISIBLE_DEVICES=0 python3 tools/dist_train.py --cfg experiments/coco/higher-hrnet/config.yaml 
+
+(Distributed training) CUDA_VISIBLE_DEVICES=0,1 python3 tools/dist_train.py --cfg experiments/coco/higher-hrnet/config.yaml --dist-url tcp://127.0.0.1:12345
+
+### Testing on COCO (Nvidia GPUs) ###
 
 Single-scale and multi-scale testing is supported.
 
-Training and validation scripts can be found at tools/
+(Single scale testing) python3 tools/valid.py --cfg experiments/coco/higher-hrnet/config.yaml TEST.MODEL_FILE /path/to/model.pth 
 
+(Multi-scale testing) python3 tools/valid.py --cfg experiments/coco/higher-hrnet/config.yaml TEST.MODEL_FILE /path/to/model.pth TEST.SCALE_FACTOR [0.5,1.0,1.5]
 
 ## TODO: ##
 
