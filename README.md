@@ -1,6 +1,6 @@
 # EfficientHRNet
 
-EfficientHRNet is a family of scalable and efficient networks created by unifiying EfficientNet and HigherHRNet for Multi-person human pose estimation. 
+EfficientHRNet is a family of scalable and efficient networks created by unifiying EfficientNet and HigherHRNet for Multi-person human pose estimation. A preprint of our paper can be found [here.](https://arxiv.org/abs/2007.08090)
 
 Our code is based on the 
 
@@ -36,6 +36,8 @@ Varying the following parameters provide different EfficientHRNet models ranging
 
 More details on scaling can be found in our paper: https://arxiv.org/pdf/2007.08090.pdf
 
+Examples can be seen in the Example Configs folder.
+
 
 ## EfficientHRNet Training and Evaluation ## 
 
@@ -55,6 +57,21 @@ Single-scale and multi-scale testing is supported.
 
 (Multi-scale testing) python3 tools/valid.py --cfg experiments/coco/higher-hrnet/config.yaml TEST.MODEL_FILE /path/to/model.pth TEST.SCALE_FACTOR [0.5,1.0,1.5]
 
-## TODO: ##
+## Pretrained Models ##
 
-Make pretrained models public. 
+COCO pretrained models for EfficientHRNet H0 to H-4 can be download [here.](https://drive.google.com/drive/folders/1FcJ1bawqWb1yAkcqb2sJfMsePMwupsWJ?usp=sharing)
+
+## Citation ##
+
+If you would like use EfficientHRNet in your work, please use the following citation.
+
+@misc{neff2020efficienthrnet,
+      title={EfficientHRNet: Efficient Scaling for Lightweight High-Resolution Multi-Person Pose Estimation}, 
+      author={Christopher Neff and Aneri Sheth and Steven Furgurson and Hamed Tabkhi},
+      year={2020},
+      eprint={2007.08090},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
+}
+
+We also recommend citing EfficientNet and HigherHRNet, which inspired this work.
