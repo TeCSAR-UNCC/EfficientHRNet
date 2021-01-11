@@ -61,6 +61,8 @@ Single-scale and multi-scale testing is supported.
 
 COCO pretrained models for EfficientHRNet H0 to H-4 can be download [here.](https://drive.google.com/drive/folders/1FcJ1bawqWb1yAkcqb2sJfMsePMwupsWJ?usp=sharing)
 
+Compact EfficientNet weights can be downloaded [here.](https://drive.google.com/drive/folders/1AZMYacfDcZv4QePcYONtg2in7oVmmSwV?usp=sharing)
+
 ## Citation ##
 
 If you would like use EfficientHRNet in your work, please use the following citation.
