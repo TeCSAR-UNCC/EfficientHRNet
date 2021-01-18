@@ -424,8 +424,8 @@ class PoseHigherResolutionNet(nn.Module):
         deconv_cfg = extra.DECONV
         for i in range(deconv_cfg.NUM_DECONVS):
             input_channels = int(math.ceil(deconv_cfg.NUM_CHANNELS[i]*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))
-            output_channels = cfg.MODEL.NUM_JOINTS  #+ dim_tag \
-                #if cfg.LOSS.WITH_AE_LOSS[i+1] else cfg.MODEL.NUM_JOINTS
+            output_channels = cfg.MODEL.NUM_JOINTS + dim_tag \
+                if cfg.LOSS.WITH_AE_LOSS[i+1] else cfg.MODEL.NUM_JOINTS
             final_layers.append(nn.Conv2d(
                 in_channels=input_channels,
                 out_channels=output_channels,
