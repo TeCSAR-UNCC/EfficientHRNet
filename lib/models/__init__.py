@@ -8,6 +8,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import models.pose_higher_hrnet
+from .pose_higher_hrnet import get_pose_net
 #import models.pose_efficientnet
 #import models.pose_efficientnet_all

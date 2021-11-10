@@ -9,18 +9,21 @@ import logging
 import torch
 import torch.nn as nn
 import math
-from models.efficientnet_blocks import conv_bn_act, SamePadConv2d, Flatten, SEModule, DropConnect, conv, conv_dw_no_bn,conv, conv_bn, conv_pw
+from .efficientnet_blocks import conv_bn_act, SamePadConv2d, Flatten, SEModule, DropConnect, conv, conv_dw_no_bn, conv, conv_bn, conv_pw
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
+
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
                      padding=1, bias=False)
 
+
 class BasicBlock(nn.Module):
     expansion = 1
+
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes, stride)
@@ -30,6 +33,7 @@ class BasicBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(planes, momentum=BN_MOMENTUM)
         self.downsample = downsample
         self.stride = stride
+
     def forward(self, x):
         residual = x
         out = self.conv1(x)
@@ -43,22 +47,28 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
         return out
 
-#EfficientNet modules
+# EfficientNet modules
+
+
 class Swish(nn.Module):
     def __init__(self, *args, **kwargs):
         super(Swish, self).__init__()
+
     def forward(self, x):
         return x * torch.sigmoid(x)
+
 
 class ConvBNReLU(nn.Sequential):
     def __init__(self, in_planes, out_planes, kernel_size, stride=1, groups=1):
         padding = self._get_padding(kernel_size, stride)
         super(ConvBNReLU, self).__init__(
             nn.ZeroPad2d(padding),
-            nn.Conv2d(in_planes, out_planes, kernel_size, stride, padding=0, groups=groups, bias=False),
+            nn.Conv2d(in_planes, out_planes, kernel_size, stride,
+                      padding=0, groups=groups, bias=False),
             nn.BatchNorm2d(out_planes),
             Swish(),
         )
+
     def _get_padding(self, kernel_size, stride):
         p = max(kernel_size - stride, 0)
         return [p // 2, p - p // 2, p // 2, p - p // 2]
@@ -74,8 +84,10 @@ class SqueezeExcitation(nn.Module):
             nn.Conv2d(reduced_dim, in_planes, 1),
             nn.Sigmoid(),
         )
+
     def forward(self, x):
         return x * self.se(x)
+
 
 class MBConvBlock(nn.Module):
     def __init__(self,
@@ -102,7 +114,8 @@ class MBConvBlock(nn.Module):
 
         layers += [
             # dw
-            ConvBNReLU(hidden_dim, hidden_dim, kernel_size, stride=stride, groups=hidden_dim),
+            ConvBNReLU(hidden_dim, hidden_dim, kernel_size,
+                       stride=stride, groups=hidden_dim),
             # se
             SqueezeExcitation(hidden_dim, reduced_dim),
             # pw-linear
@@ -128,21 +141,25 @@ class MBConvBlock(nn.Module):
         else:
             return self.conv(x)
 
+
 def _make_divisible(value, divisor=8):
     new_value = max(divisor, int(value + divisor / 2) // divisor * divisor)
     if new_value < 0.9 * value:
-        new_value += divisor 
+        new_value += divisor
     return new_value
+
 
 def _round_filters(filters, width_mult):
     if width_mult == 1.0:
         return filters
     return int(_make_divisible(filters * width_mult))
 
+
 def _round_repeats(repeats, depth_mult):
     if depth_mult == 1.0:
         return repeats
     return int(math.ceil(depth_mult * repeats))
+
 
 class HighResolutionModule(nn.Module):
     def __init__(self, num_branches, blocks, num_blocks, num_inchannels,
@@ -282,12 +299,16 @@ class HighResolutionModule(nn.Module):
             x_fuse.append(self.relu(y))
 
         return x_fuse
+
+
 blocks_dict = {
     'BASIC': BasicBlock,
-    #'BOTTLENECK': Bottleneck
+    # 'BOTTLENECK': Bottleneck
 }
+
+
 class PoseHigherResolutionNet(nn.Module):
-    def __init__(self,cfg, **kwargs):
+    def __init__(self, cfg, **kwargs):
         super(PoseHigherResolutionNet, self).__init__()
         self.depth_mult = cfg.MODEL.DEPTH_MULT
         settings = [
@@ -301,17 +322,20 @@ class PoseHigherResolutionNet(nn.Module):
             [6, 320, 1, 1, 3]   # MBConv6_3x3, SE, 46
         ]
         # yapf: enable
-        out_channels = _round_filters(32, cfg.MODEL.WIDTH_MULT)#width_mult)
+        out_channels = _round_filters(32, cfg.MODEL.WIDTH_MULT)  # width_mult)
         features = [ConvBNReLU(3, out_channels, 3, stride=2)]
 
         in_channels = out_channels
         for t, c, n, s, k in settings:
-            out_channels = _round_filters(c, cfg.MODEL.WIDTH_MULT)#width_mult)
-            repeats = _round_repeats(n, cfg.MODEL.DEPTH_MULT)#self.depth_mult)
+            out_channels = _round_filters(
+                c, cfg.MODEL.WIDTH_MULT)  # width_mult)
+            # self.depth_mult)
+            repeats = _round_repeats(n, cfg.MODEL.DEPTH_MULT)
 
             for i in range(repeats):
                 stride = s if i == 0 else 1
-                features += [MBConvBlock(in_channels, out_channels, expand_ratio=t, stride=stride, kernel_size=k)]
+                features += [MBConvBlock(in_channels, out_channels,
+                                         expand_ratio=t, stride=stride, kernel_size=k)]
                 in_channels = out_channels
         self.features = nn.Sequential(*features)
         # weight initialization
@@ -329,7 +353,7 @@ class PoseHigherResolutionNet(nn.Module):
                 nn.init.uniform_(m.weight, -init_range, init_range)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
-        
+
         self.inplanes = 64
         extra = cfg.MODEL.EXTRA
 
@@ -337,64 +361,73 @@ class PoseHigherResolutionNet(nn.Module):
         num_channels = self.stage2_cfg['NUM_CHANNELS']
         block = blocks_dict[self.stage2_cfg['BLOCK']]
         num_channels = [
-            int(math.ceil(num_channels[i] * (pow(1.2455,cfg.MODEL.SCALE_FACTOR)) * block.expansion))  for i in range(len(num_channels))
+            int(math.ceil(num_channels[i] * (pow(1.2455, cfg.MODEL.SCALE_FACTOR)) * block.expansion)) for i in range(len(num_channels))
         ]
         if cfg.MODEL.WIDTH_MULT == 1 and cfg.MODEL.DEPTH_MULT == 1:
-            self.trans1_branch1 = nn.Sequential(nn.Conv2d(24,32,3,1,1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
-            self.trans1_branch2 = nn.Sequential(nn.Conv2d(40,64,3,1,1), nn.BatchNorm2d(64), nn.ReLU(inplace=True)) 
-        else:               
-            self.trans1_branch1 = nn.Sequential(nn.Conv2d(int(_make_divisible(24*cfg.MODEL.WIDTH_MULT)),int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1), 
-                                                nn.BatchNorm2d(int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
-            self.trans1_branch2 = nn.Sequential(nn.Conv2d(int(_make_divisible(40*cfg.MODEL.WIDTH_MULT)),int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1), 
-                                                nn.BatchNorm2d(int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans1_branch1 = nn.Sequential(
+                nn.Conv2d(24, 32, 3, 1, 1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
+            self.trans1_branch2 = nn.Sequential(
+                nn.Conv2d(40, 64, 3, 1, 1), nn.BatchNorm2d(64), nn.ReLU(inplace=True))
+        else:
+            self.trans1_branch1 = nn.Sequential(nn.Conv2d(int(_make_divisible(24*cfg.MODEL.WIDTH_MULT)), int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans1_branch2 = nn.Sequential(nn.Conv2d(int(_make_divisible(40*cfg.MODEL.WIDTH_MULT)), int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
 
         self.stage2, pre_stage_channels = self._make_stage(
-            self.stage2_cfg, num_channels, cfg) #should happen automatically
+            self.stage2_cfg, num_channels, cfg)  # should happen automatically
 
         self.stage3_cfg = cfg['MODEL']['EXTRA']['STAGE3']
         num_channels = self.stage3_cfg['NUM_CHANNELS']
         block = blocks_dict[self.stage3_cfg['BLOCK']]
         num_channels = [
-            int(math.ceil(num_channels[i] * (pow(1.2455,cfg.MODEL.SCALE_FACTOR)) * block.expansion))  for i in range(len(num_channels))
+            int(math.ceil(num_channels[i] * (pow(1.2455, cfg.MODEL.SCALE_FACTOR)) * block.expansion)) for i in range(len(num_channels))
         ]
         if cfg.MODEL.WIDTH_MULT == 1 and cfg.MODEL.DEPTH_MULT == 1:
-            self.trans2_branch1 = nn.Sequential(nn.Conv2d(32,32,3,1,1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
-            self.trans2_branch2 = nn.Sequential(nn.Conv2d(64,64,3,1,1), nn.BatchNorm2d(64), nn.ReLU(inplace=True))
-            self.trans2_branch3 = nn.Sequential(nn.Conv2d(112,128,3,1,1), nn.BatchNorm2d(128), nn.ReLU(inplace=True))
+            self.trans2_branch1 = nn.Sequential(
+                nn.Conv2d(32, 32, 3, 1, 1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
+            self.trans2_branch2 = nn.Sequential(
+                nn.Conv2d(64, 64, 3, 1, 1), nn.BatchNorm2d(64), nn.ReLU(inplace=True))
+            self.trans2_branch3 = nn.Sequential(
+                nn.Conv2d(112, 128, 3, 1, 1), nn.BatchNorm2d(128), nn.ReLU(inplace=True))
         else:
-            self.trans2_branch1 = nn.Sequential(nn.Conv2d(int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR))), int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1),
-                                                nn.BatchNorm2d(int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
-            self.trans2_branch2 = nn.Sequential(nn.Conv2d(int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR))), int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1),
-                                                nn.BatchNorm2d(int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
-            self.trans2_branch3 = nn.Sequential(nn.Conv2d(int(_make_divisible(112*cfg.MODEL.WIDTH_MULT)), int(math.ceil(128*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1),
-                                                nn.BatchNorm2d(int(math.ceil(128*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans2_branch1 = nn.Sequential(nn.Conv2d(int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans2_branch2 = nn.Sequential(nn.Conv2d(int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans2_branch3 = nn.Sequential(nn.Conv2d(int(_make_divisible(112*cfg.MODEL.WIDTH_MULT)), int(math.ceil(128*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(128*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
 
         self.stage3, pre_stage_channels = self._make_stage(
-            self.stage3_cfg, num_channels, cfg) #should happen automatically
+            self.stage3_cfg, num_channels, cfg)  # should happen automatically
 
         self.stage4_cfg = cfg['MODEL']['EXTRA']['STAGE4']
         num_channels = self.stage4_cfg['NUM_CHANNELS']
         block = blocks_dict[self.stage4_cfg['BLOCK']]
         num_channels = [
-            int(math.ceil(num_channels[i] * (pow(1.2455,cfg.MODEL.SCALE_FACTOR)) * block.expansion))  for i in range(len(num_channels))
+            int(math.ceil(num_channels[i] * (pow(1.2455, cfg.MODEL.SCALE_FACTOR)) * block.expansion)) for i in range(len(num_channels))
         ]
         if cfg.MODEL.WIDTH_MULT == 1 and cfg.MODEL.DEPTH_MULT == 1:
-            self.trans3_branch1 = nn.Sequential(nn.Conv2d(32,32,3,1,1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
-            self.trans3_branch2 = nn.Sequential(nn.Conv2d(64,64,3,1,1), nn.BatchNorm2d(64), nn.ReLU(inplace=True))
-            self.trans3_branch3 = nn.Sequential(nn.Conv2d(128,128,3,1,1), nn.BatchNorm2d(128), nn.ReLU(inplace=True))
-            self.trans3_branch4 = nn.Sequential(nn.Conv2d(320,256,3,1,1), nn.BatchNorm2d(256), nn.ReLU(inplace=True))
+            self.trans3_branch1 = nn.Sequential(
+                nn.Conv2d(32, 32, 3, 1, 1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
+            self.trans3_branch2 = nn.Sequential(
+                nn.Conv2d(64, 64, 3, 1, 1), nn.BatchNorm2d(64), nn.ReLU(inplace=True))
+            self.trans3_branch3 = nn.Sequential(
+                nn.Conv2d(128, 128, 3, 1, 1), nn.BatchNorm2d(128), nn.ReLU(inplace=True))
+            self.trans3_branch4 = nn.Sequential(
+                nn.Conv2d(320, 256, 3, 1, 1), nn.BatchNorm2d(256), nn.ReLU(inplace=True))
         else:
-            self.trans3_branch1 = nn.Sequential(nn.Conv2d(int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR))), int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1),
-                                                nn.BatchNorm2d(int(math.ceil(32*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
-            self.trans3_branch2 = nn.Sequential(nn.Conv2d(int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR))), int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1),
-                                                nn.BatchNorm2d(int(math.ceil(64*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
-            self.trans3_branch3 = nn.Sequential(nn.Conv2d(int(math.ceil(128*pow(1.2455,cfg.MODEL.SCALE_FACTOR))), int(math.ceil(128*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1),
-                                                nn.BatchNorm2d(int(math.ceil(128*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
-            self.trans3_branch4 = nn.Sequential(nn.Conv2d(int(_make_divisible(320*cfg.MODEL.WIDTH_MULT)), int(math.ceil(256*pow(1.2455,cfg.MODEL.SCALE_FACTOR))),3,1,1),
-                                                nn.BatchNorm2d(int(math.ceil(256*pow(1.2455,cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
-        
+            self.trans3_branch1 = nn.Sequential(nn.Conv2d(int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(32*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans3_branch2 = nn.Sequential(nn.Conv2d(int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(64*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans3_branch3 = nn.Sequential(nn.Conv2d(int(math.ceil(128*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), int(math.ceil(128*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(128*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+            self.trans3_branch4 = nn.Sequential(nn.Conv2d(int(_make_divisible(320*cfg.MODEL.WIDTH_MULT)), int(math.ceil(256*pow(1.2455, cfg.MODEL.SCALE_FACTOR))), 3, 1, 1),
+                                                nn.BatchNorm2d(int(math.ceil(256*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))), nn.ReLU(inplace=True))
+
         self.stage4, pre_stage_channels = self._make_stage(
-            self.stage4_cfg, num_channels, cfg, multi_scale_output=False) #should happen automatically
+            self.stage4_cfg, num_channels, cfg, multi_scale_output=False)  # should happen automatically
 
         self.final_layers = self._make_final_layers(cfg, pre_stage_channels[0])
         self.deconv_layers = self._make_deconv_layers(
@@ -423,7 +456,8 @@ class PoseHigherResolutionNet(nn.Module):
 
         deconv_cfg = extra.DECONV
         for i in range(deconv_cfg.NUM_DECONVS):
-            input_channels = int(math.ceil(deconv_cfg.NUM_CHANNELS[i]*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))
+            input_channels = int(
+                math.ceil(deconv_cfg.NUM_CHANNELS[i]*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))
             output_channels = cfg.MODEL.NUM_JOINTS + dim_tag \
                 if cfg.LOSS.WITH_AE_LOSS[i+1] else cfg.MODEL.NUM_JOINTS
             final_layers.append(nn.Conv2d(
@@ -447,7 +481,8 @@ class PoseHigherResolutionNet(nn.Module):
                 final_output_channels = cfg.MODEL.NUM_JOINTS + dim_tag \
                     if cfg.LOSS.WITH_AE_LOSS[i] else cfg.MODEL.NUM_JOINTS
                 input_channels += final_output_channels
-            output_channels = int(math.ceil(deconv_cfg.NUM_CHANNELS[i]*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))
+            output_channels = int(
+                math.ceil(deconv_cfg.NUM_CHANNELS[i]*pow(1.2455, cfg.MODEL.SCALE_FACTOR)))
             deconv_kernel, padding, output_padding = \
                 self._get_deconv_cfg(deconv_cfg.KERNEL_SIZE[i])
 
@@ -511,7 +546,7 @@ class PoseHigherResolutionNet(nn.Module):
         num_channels = layer_config['NUM_CHANNELS']
         #scale_factor = 0
         num_channels = [
-            int(math.ceil(num_channels[i] * (pow(1.2455,cfg.MODEL.SCALE_FACTOR))))  for i in range(len(num_channels))
+            int(math.ceil(num_channels[i] * (pow(1.2455, cfg.MODEL.SCALE_FACTOR)))) for i in range(len(num_channels))
         ]
         block = blocks_dict[layer_config['BLOCK']]
         fuse_method = layer_config['FUSE_METHOD']
@@ -539,97 +574,97 @@ class PoseHigherResolutionNet(nn.Module):
         return nn.Sequential(*modules), num_inchannels
 
     def forward(self, x):
-        if self.depth_mult == 0.483: #bc4
-            #print("HERE!!!!")
-            for i in range(0,3):
-                x = self.features[i](x) #96x96
+        if self.depth_mult == 0.483:  # bc4
+            # print("HERE!!!!")
+            for i in range(0, 3):
+                x = self.features[i](x)  # 96x96
             x1 = x
-            for i in range(3,4): 
-                x = self.features[i](x) #48x48
+            for i in range(3, 4):
+                x = self.features[i](x)  # 48x48
             x2 = x
-            for i in range(4,8):
-                x = self.features[i](x) #24x24
+            for i in range(4, 8):
+                x = self.features[i](x)  # 24x24
             x3 = x
-            for i in range(8,11):
-                x = self.features[i](x) #12x12
+            for i in range(8, 11):
+                x = self.features[i](x)  # 12x12
             x4 = x
-        if self.depth_mult == 0.578: #bc3
-            for i in range(0,4):
-                x = self.features[i](x) #104x104
+        if self.depth_mult == 0.578:  # bc3
+            for i in range(0, 4):
+                x = self.features[i](x)  # 104x104
             x1 = x
-            for i in range(4,6):
-                x = self.features[i](x) #52x52
+            for i in range(4, 6):
+                x = self.features[i](x)  # 52x52
             x2 = x
-            for i in range(6,10):
-                x = self.features[i](x) #26x26
+            for i in range(6, 10):
+                x = self.features[i](x)  # 26x26
             x3 = x
-            for i in range(10,14):
-                x = self.features[i](x) #13x13
+            for i in range(10, 14):
+                x = self.features[i](x)  # 13x13
             x4 = x
-        if self.depth_mult == 0.694: #bc2
-            for i in range(0,4):
-                x = self.features[i](x) #112x112
+        if self.depth_mult == 0.694:  # bc2
+            for i in range(0, 4):
+                x = self.features[i](x)  # 112x112
             x1 = x
-            for i in range(4,6):
-                x = self.features[i](x) #56x56
+            for i in range(4, 6):
+                x = self.features[i](x)  # 56x56
             x2 = x
-            for i in range(6,12):
-                x = self.features[i](x) #28x28
+            for i in range(6, 12):
+                x = self.features[i](x)  # 28x28
             x3 = x
-            for i in range(12,16):
-                x = self.features[i](x) #14x14
+            for i in range(12, 16):
+                x = self.features[i](x)  # 14x14
             x4 = x
-        if self.depth_mult == 1 or self.depth_mult == 0.833: #b0
-            for i in range(0,4):
-                x = self.features[i](x) #128x128, 120x120
+        if self.depth_mult == 1 or self.depth_mult == 0.833:  # b0
+            for i in range(0, 4):
+                x = self.features[i](x)  # 128x128, 120x120
             x1 = x
-            for i in range(4,6):
-                x = self.features[i](x) #64x64, 60x60
+            for i in range(4, 6):
+                x = self.features[i](x)  # 64x64, 60x60
             x2 = x
-            for i in range(6,12):
-                x = self.features[i](x) #32x32, 30x30
+            for i in range(6, 12):
+                x = self.features[i](x)  # 32x32, 30x30
             x3 = x
-            for i in range(12,17):
-                x = self.features[i](x) #16x16, 15x15
+            for i in range(12, 17):
+                x = self.features[i](x)  # 16x16, 15x15
             x4 = x
-        elif self.depth_mult == 1.1 or self.depth_mult == 1.2: #b1 and b2
-            for i in range(0,6):
-                x = self.features[i](x) 
-            x1 = x
-            for i in range(6,9):
-                x = self.features[i](x) 
-            x2 = x
-            for i in range(9,17):
+        elif self.depth_mult == 1.1 or self.depth_mult == 1.2:  # b1 and b2
+            for i in range(0, 6):
                 x = self.features[i](x)
-            x3 = x
-            for i in range(17,24):
-                x = self.features[i](x) 
-            x4 = x
-        elif self.depth_mult== 1.4: #b3
-            for i in range(0,6):
-                x = self.features[i](x) 
             x1 = x
-            for i in range(6,9):
+            for i in range(6, 9):
                 x = self.features[i](x)
             x2 = x
-            for i in range(9,19):
-                x = self.features[i](x) 
+            for i in range(9, 17):
+                x = self.features[i](x)
             x3 = x
-            for i in range(19,27):
-                x = self.features[i](x) 
+            for i in range(17, 24):
+                x = self.features[i](x)
             x4 = x
-        elif self.depth_mult == 1.8: #b4
-            for i in range(0,7):
-                x = self.features[i](x) 
+        elif self.depth_mult == 1.4:  # b3
+            for i in range(0, 6):
+                x = self.features[i](x)
             x1 = x
-            for i in range(7,11):
-                x = self.features[i](x) 
+            for i in range(6, 9):
+                x = self.features[i](x)
             x2 = x
-            for i in range(11,23):
-                x = self.features[i](x) 
+            for i in range(9, 19):
+                x = self.features[i](x)
             x3 = x
-            for i in range(23,33):
-                x = self.features[i](x) 
+            for i in range(19, 27):
+                x = self.features[i](x)
+            x4 = x
+        elif self.depth_mult == 1.8:  # b4
+            for i in range(0, 7):
+                x = self.features[i](x)
+            x1 = x
+            for i in range(7, 11):
+                x = self.features[i](x)
+            x2 = x
+            for i in range(11, 23):
+                x = self.features[i](x)
+            x3 = x
+            for i in range(23, 33):
+                x = self.features[i](x)
             x4 = x
         '''
         else: #b5
@@ -649,14 +684,14 @@ class PoseHigherResolutionNet(nn.Module):
         x_list = []
         x_list.append(self.trans1_branch1(x1))
         x_list.append(self.trans1_branch2(x2))
-        
+
         y_list = self.stage2(x_list)
 
         x_list = []
         x_list.append(self.trans2_branch1(y_list[-2]))
         x_list.append(self.trans2_branch2(y_list[-1]))
         x_list.append(self.trans2_branch3(x3))
-        
+
         y_list = self.stage3(x_list)
 
         x_list = []
@@ -664,7 +699,7 @@ class PoseHigherResolutionNet(nn.Module):
         x_list.append(self.trans3_branch2(y_list[-2]))
         x_list.append(self.trans3_branch3(y_list[-1]))
         x_list.append(self.trans3_branch4(x4))
-        
+
         y_list = self.stage4(x_list)
 
         final_outputs = []
@@ -722,6 +757,7 @@ class PoseHigherResolutionNet(nn.Module):
                             )
                         need_init_state_dict[name] = m
             self.load_state_dict(need_init_state_dict, strict=False)
+
 
 def get_pose_net(cfg, is_train, **kwargs):
     model = PoseHigherResolutionNet(cfg, **kwargs)
