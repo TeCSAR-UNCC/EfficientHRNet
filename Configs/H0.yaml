@@ -1,4 +1,4 @@
-AUTO_RESUME: False
+AUTO_RESUME: True
 DATA_DIR: ''
 GPUS: (0,)
 LOG_DIR: log
@@ -14,8 +14,8 @@ DATASET:
   DATASET_TEST: coco
   DATA_FORMAT: jpg
   FLIP: 0.5
-  INPUT_SIZE: 512
-  OUTPUT_SIZE: [128, 256]
+  INPUT_SIZE: 768 #--------------------we changed the input size to 768--------------------
+  OUTPUT_SIZE: [192, 384] #--------------------we change the outout_size to 384--------------------
   MAX_NUM_PEOPLE: 30
   MAX_ROTATION: 30
   MAX_SCALE: 1.5
@@ -23,20 +23,20 @@ DATASET:
   MAX_TRANSLATE: 40
   MIN_SCALE: 0.75
   NUM_JOINTS: 17
-  ROOT: 'data/coco' #Dataset Root Folder
+  ROOT: '/home/adaneshp/panda_to_coco_focused/panda_to_coco_new_version/panda_coco3_768' #--------------------we changed the path--------------------
   TEST: val2017
   TRAIN: train2017
 DEBUG:
-  DEBUG: True
+  DEBUG: False
   SAVE_BATCH_IMAGES_GT: False
   SAVE_BATCH_IMAGES_PRED: False
-  SAVE_HEATMAPS_GT: True
-  SAVE_HEATMAPS_PRED: True
-  SAVE_TAGMAPS_PRED: True
+  SAVE_HEATMAPS_GT: False
+  SAVE_HEATMAPS_PRED: False
+  SAVE_TAGMAPS_PRED: False
 LOSS:
   NUM_STAGES: 2
   AE_LOSS_TYPE: exp
-  WITH_AE_LOSS: [True, False]
+  WITH_AE_LOSS: [True, True]
   PUSH_LOSS_FACTOR: [0.001, 0.001]
   PULL_LOSS_FACTOR: [0.001, 0.001]
   WITH_HEATMAPS_LOSS: [True, True]
@@ -97,7 +97,7 @@ MODEL:
   INIT_WEIGHTS: True
   NAME: pose_higher_hrnet
   NUM_JOINTS: 17
-  PRETRAINED: 'example_path/efficientnet-b0-4cfa50.pth' #Path to pretrained backbone model
+  PRETRAINED: '/home/adaneshp/EfficientHRNet_PandaCoco/code/pretrained/efficientnet-b0-4cfa50.pth' #Path to pretrained backbone model
   TAG_PER_JOINT: True
 TEST:
   FLIP_TEST: True
@@ -113,11 +113,11 @@ TEST:
 TRAIN:
   BEGIN_EPOCH: 0
   CHECKPOINT: ''
-  END_EPOCH: 300
+  END_EPOCH: 150
   GAMMA1: 0.99
   GAMMA2: 0.0
-  IMAGES_PER_GPU: 1
-  LR: 0.001
+  IMAGES_PER_GPU: 20 #--------------------we changed the images per gpu to --------------------
+  LR: 0.00001
   LR_FACTOR: 0.1
   LR_STEP: [200, 260]
   MOMENTUM: 0.9
@@ -126,4 +126,4 @@ TRAIN:
   RESUME: False
   SHUFFLE: True
   WD: 0.0001
-WORKERS: 0
+WORKERS: 20 #--------------------we changed the workers 24--------------------
