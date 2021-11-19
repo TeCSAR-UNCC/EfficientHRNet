@@ -14,8 +14,8 @@ DATASET:
   DATASET_TEST: coco
   DATA_FORMAT: jpg
   FLIP: 0.5
-  INPUT_SIZE: 768 #--------------------we changed the input size to 768--------------------
-  OUTPUT_SIZE: [192, 384] #--------------------we change the outout_size to 384--------------------
+  INPUT_SIZE: 512
+  OUTPUT_SIZE: [128, 256]
   MAX_NUM_PEOPLE: 30
   MAX_ROTATION: 30
   MAX_SCALE: 1.5

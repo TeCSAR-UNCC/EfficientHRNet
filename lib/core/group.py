@@ -167,9 +167,9 @@ class HeatmapParser(object):
         ind_k = torch.stack((x, y), dim=3)
 
         ans = {
-            'tag_k': tag_k.cpu().numpy(),
-            'loc_k': ind_k.cpu().numpy(),
-            'val_k': val_k.cpu().numpy()
+            'tag_k': tag_k.detach().numpy(),
+            'loc_k': ind_k.detach().numpy(),
+            'val_k': val_k.detach().numpy()
         }
 
         return ans
@@ -271,8 +271,8 @@ class HeatmapParser(object):
             ans = ans[0]
             # for every detected person
             for i in range(len(ans)):
-                det_numpy = det[0].cpu().numpy()
-                tag_numpy = tag[0].cpu().numpy()
+                det_numpy = det[0].detach().numpy()
+                tag_numpy = tag[0].detach().numpy()
                 if not self.tag_per_joint:
                     tag_numpy = np.tile(
                         tag_numpy, (self.params.num_joints, 1, 1, 1)

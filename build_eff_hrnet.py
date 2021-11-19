@@ -23,6 +23,14 @@ from .lib.utils.transforms import resize
 from .lib.utils.DetectionRegresser import DetectionRegresser
 
 
+def xyxy2rowh(x1, y1, x2, y2):
+    cx = (x2+x1)//2
+    cy = (y2+y1)//2
+    w = abs(x2-x1)
+    h = abs(y2-x1)
+    return (cx, cy, w, h)
+
+
 '''
 def infer_efficient(net, img, net_input_height_size, stride, upsample_ratio, cpu,
                pad_value=(0, 0, 0), img_mean=(128, 128, 128), img_scale=1/256):
@@ -53,7 +61,7 @@ def infer_efficient(net, img, net_input_height_size, stride, upsample_ratio, cpu
 
 
 class EfficientHRNetKeypoints:
-    def __init__(self, pose_cfg):#, defaults_dict):
+    def __init__(self, pose_cfg):  # , defaults_dict):
         self.colors = []
         self.pose_cfg = pose_cfg
         self.net = get_pose_net(pose_cfg, is_train=False)
@@ -63,15 +71,16 @@ class EfficientHRNetKeypoints:
         self.eval_set = 2
         # self.net.cuda()
         self.d = dict()
-        #FIXME: Add the DetectionRegresser configuration to YAML file
-        self.dr = DetectionRegresser(0)#, defaults_dict['window_length'], defaults_dict['iou_threshold'],
-                                     #defaults_dict['forgetfulness'], defaults_dict['regress_type'])
-        self.parser=HeatmapParser(self.pose_cfg)
-        cudnn.benchmark=self.pose_cfg.CUDNN.BENCHMARK
-        torch.backends.cudnn.deterministic=self.pose_cfg.CUDNN.DETERMINISTIC
-        torch.backends.cudnn.enabled=self.pose_cfg.CUDNN.ENABLED
+        # FIXME: Add the DetectionRegresser configuration to YAML file
+        # , defaults_dict['window_length'], defaults_dict['iou_threshold'],
+        self.dr = DetectionRegresser(0)
+        # defaults_dict['forgetfulness'], defaults_dict['regress_type'])
+        self.parser = HeatmapParser(self.pose_cfg)
+        cudnn.benchmark = self.pose_cfg.CUDNN.BENCHMARK
+        torch.backends.cudnn.deterministic = self.pose_cfg.CUDNN.DETERMINISTIC
+        torch.backends.cudnn.enabled = self.pose_cfg.CUDNN.ENABLED
 
-        self.transforms=torchvision.transforms.Compose(
+        self.transforms = torchvision.transforms.Compose(
             [
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize(
@@ -113,7 +122,8 @@ class EfficientHRNetKeypoints:
             final_pts.insert(i, list())
             for pts in final_results[i]:
                 if len(final_pts[i]) > 0:
-                    diff = np.mean(np.abs(np.array(final_pts[i])[..., :2] - pts[..., :2]))
+                    diff = np.mean(
+                        np.abs(np.array(final_pts[i])[..., :2] - pts[..., :2]))
                     if np.any(diff < 3):
                         final_pts[i].append([-1, -1, pts[2], pts[3]])
                         continue
@@ -155,7 +165,8 @@ class EfficientHRNetKeypoints:
     def getEfficientHRNetPoseData(self, image, outlier_thresh=-0.1, heatmap_th=0.075):
         # Calculate poses and regress bounding boxes from keypoints
         valid_keypoint_perc = []
-        keypoints, x_coordinates, y_coordinates, h_scores = self.runPoseEstimation(image)
+        keypoints, x_coordinates, y_coordinates, h_scores = self.runPoseEstimation(
+            image)
         bboxes = []
         final_keypoints = []
 
@@ -204,7 +215,8 @@ class EfficientHRNetKeypoints:
                 height = np.amax(y_ax) - y_min
                 if (height >= width):
                     bboxes.append([x_min, y_min, width, height])
-                    valid_keypoint_perc.append(num_found_keypoints / len(keypoints[idx]))
+                    valid_keypoint_perc.append(
+                        num_found_keypoints / len(keypoints[idx]))
                     final_keypoints.append(keypoints[idx])
 
         # Run linear regression
@@ -222,44 +234,44 @@ class EfficientHRNetKeypoints:
         valid_keypoint_perc = np.array(valid_keypoint_perc)
         return bboxes, final_keypoints, valid_keypoint_perc
 
-    def draw_bboxes_and_keypoints(self,keypoints,bboxes,image):
+    def draw_bboxes_and_keypoints(self, keypoints, bboxes, image):
         image_crops_list = []
-        image1 = image.copy()
         self.d.clear()
+        bboxes_xywh = []
         for i in range(len(bboxes)):
-            color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+            color = (np.random.randint(0, 255), np.random.randint(
+                0, 255), np.random.randint(0, 255))
             x, y, w, h = bboxes[i]
-            x, y, w, h = int(x), int(y), int(w), int(h) #rectangle
+            x, y, w, h = int(x), int(y), int(w), int(h)  # rectangle
             x1 = x
             y1 = y
             x2, y2 = x1 + w, y1 + h
-            x1,y1,x2,y2 = x1-10,y1-10,x2+10,y2+10
+            x1, y1, x2, y2 = x1-10, y1-10, x2+10, y2+10
             check_keypoints = True
             for j in keypoints[i]:
                 x, y = j
-                x, y = int(round(x,0)), int(round(y,0))
-                if x<0 or y<0:
+                x, y = int(round(x, 0)), int(round(y, 0))
+                if x < 0 or y < 0:
                     continue
                 if not(x1 <= x <= x2 and y1 <= y <= y2):
                     # pass
-                    check_keypoints=False #if you disable this then check for bb won't be performed
-                    print('failed for BB :{} ,({},{})<=({},{})<=({},{})'.format(i,x1,y1,x,y,x2,y2))
+                    # check_keypoints = False  # if you disable this then check for bb won't be performed
+                    print('failed for BB :{} ,({},{})<=({},{})<=({},{})'.format(
+                        i, x1, y1, x, y, x2, y2))
 
             if check_keypoints:
                 for j in keypoints[i]:
                     x, y = j
                     x, y = int(round(x, 0)), int(round(y, 0))
                     image = cv2.circle(image, (x, y), 2, color, 2)
-                x1,y1,x2,y2 = x1+10,y1+10,x2-10,y2-10
+                x1, y1, x2, y2 = x1+10, y1+10, x2-10, y2-10
                 image = cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
                 image_crops_list.append(image[y:y + h, x:x + w])
+                bboxes_xywh.append(xyxy2rowh(x1, y1, x2, y2))
             else:
-                self.d[i]='DELETE'
+                self.d[i] = 'DELETE'
 
-
-        return image, image_crops_list
-
-
+        return image, image_crops_list, np.asarray(bboxes_xywh)
 
     def draw_bboxes(self, bboxes, image):
         image_crops_list = []
@@ -267,14 +279,16 @@ class EfficientHRNetKeypoints:
         for box in bboxes:
             x, y, w, h = box
             x, y, w, h = int(x), int(y), int(w), int(h)
-            image = cv2.rectangle(image, (x, y), (x + w, y + h), self.colors[i], 2)
+            image = cv2.rectangle(
+                image, (x, y), (x + w, y + h), self.colors[i], 2)
             image_crops_list.append(image[y:y + h, x:x + w])
-            i+=1
+            i += 1
         return image, image_crops_list
 
     def draw_keypoints(self, keypoints, image):
         for i in keypoints:
-            color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+            color = (np.random.randint(0, 255), np.random.randint(
+                0, 255), np.random.randint(0, 255))
             self.colors.append(color)
             for j in i:
                 x, y = j
@@ -322,7 +336,7 @@ class EfficientHRNetKeypoints:
             colorlist = grey_box
 
         bbox = xywh2xyxy(personID.bbox)
-        start_point = (bbox[0], bbox[1])
+        start_point = (bx, bbox[1])
         color = (colorlist[0], colorlist[1], colorlist[2])
         font = cv2.FONT_HERSHEY_SIMPLEX
         scale = 0.7
@@ -336,7 +350,8 @@ class EfficientHRNetKeypoints:
             kp0 = keypoints[pair[0], :]
             kp1 = keypoints[pair[1], :]
             if (kp0[0] != -1) and (kp1[0] != -1):
-                image = cv2.line(image, (int(kp0[0]), int(kp0[1])), (int(kp1[0]), int(kp1[1])), color, thickness)
+                image = cv2.line(image, (int(kp0[0]), int(kp0[1])), (int(
+                    kp1[0]), int(kp1[1])), color, thickness)
             if (kp0[0] != -1):
                 image = cv2.circle(image, (int(kp0[0]), int(kp0[1])), 3, color)
             if (kp1[0] != -1):
@@ -344,46 +359,61 @@ class EfficientHRNetKeypoints:
 
         return image
 
-    def things_to_do(self, image, image_output_path, frame):
+    def process(self, image):  # , image_output_path, frame):
 
         # 1) Getting Keypoints From Efficient HR Net
-        bboxes, final_keypoints, valid_keypoints = self.getEfficientHRNetPoseData(image)
-        print(len(bboxes),len(final_keypoints))
+        bboxes, final_keypoints, valid_keypoints = self.getEfficientHRNetPoseData(
+            image)
+
+        # print(len(bboxes),len(final_keypoints))
         # 2) Drawing bounding boxes and getting image crops list
         # image, image_crops_list = self.draw_bboxes(bboxes, image)
         # 3) Drawing Keypoints on image
         # image = self.draw_keypoints(final_keypoints, image)
-        image,image_crops_list = self.draw_bboxes_and_keypoints(final_keypoints,bboxes,image)
+        image, image_crops_list, bboxes_based_kp = self.draw_bboxes_and_keypoints(
+            final_keypoints, bboxes, image)
         # image = self.drawFramePoses(final_keypoints,bboxes,image)
         # 4) Saving output to folder
-        cv2.imwrite(image_output_path['EfficentHRNet'] + '/' + "{0:4d}".format(int(frame)) + '.jpg', image)
+        # cv2.imwrite(image_output_path['EfficentHRNet'] + '/' + "{0:4d}".format(int(frame)) + '.jpg', image)
 
-        for i in sorted(self.d.keys(),reverse=True):
-            print('index :{}',i)
-            final_keypoints=np.delete(final_keypoints,i,axis=0)
-            valid_keypoints=np.delete(valid_keypoints,i)
-            bboxes=np.delete(bboxes,i,axis=0)
+        for i in sorted(self.d.keys(), reverse=True):
+            # print('index :{}',i)
+            final_keypoints = np.delete(final_keypoints, i, axis=0)
+            valid_keypoints = np.delete(valid_keypoints, i)
+            bboxes_based_kp = np.delete(bboxes_based_kp, i, axis=0)
             # print(bboxes)
 
-        return bboxes, final_keypoints, valid_keypoints, image, image_crops_list
+        # keypoint 2 bboxes are giving me boxes with zero width and height. Don't know why though!! ;(
+        new_bboxes = []
+        new_final_keypoints = []
+        new_valid_keypoints = []
+        for box, kpt, valid_kpt in zip(bboxes_based_kp, final_keypoints, valid_keypoints):
+            if (box[2] != 0 and box[3] != 0):
+                new_bboxes.append(box)
+                new_valid_keypoints.append(valid_kpt)
+                new_final_keypoints.append(kpt)
+        new_bboxes = np.asarray(new_bboxes)
+        new_final_keypoints = np.asarray(new_final_keypoints)
+        new_valid_keypoints = np.asarray(new_valid_keypoints)
 
-    def run(self,frame,image,image_path,image_output_path):
+        return new_bboxes, new_final_keypoints, new_valid_keypoints, image, image_crops_list
+
+    def detect(self, image):  # , image_output_path):
         if image is not None:
-            print("Efficient HRNet :- Processing Frame : {0:4d}".format(int(frame)))
-            bboxes, final_keypoints, valid_keypoints, image, image_crops_list = self.things_to_do(image, image_output_path, frame)
-            print("Efficient HRNet :- Completed Processing Frame : {0:4d}".format(int(frame)))
+            # print("Efficient HRNet :- Processing Frame : {0:4d}".format(int(frame)))
+            bboxes, final_keypoints, valid_keypoints, image, image_crops_list = self.process(
+                image)  # , image_output_path, frame)
+            # print("Efficient HRNet :- Completed Processing Frame : {0:4d}".format(int(frame)))
             return bboxes, final_keypoints, valid_keypoints, image, image_crops_list
         else:
-            print("No Image Received " + image_path + '/' + "{0:4d}".format(int(frame)) + '.jpg')
+            # print("No Image Received " + image_path + '/' + "{0:4d}".format(int(frame)) + '.jpg')
             return None, None, None, None, None
+
 
 def build_eff_hrnnet(cfg, args, logger):
     update_config(cfg, args)
 
-
     logger.info(pprint.pformat(args))
     logger.info(cfg)
-    
+
     return EfficientHRNetKeypoints(cfg)
-
-
